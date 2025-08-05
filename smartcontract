@@ -1,1 +1,80 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.9;
 
+contract Assessment {
+    address public owner;
+    uint256 public votingEndTime;
+    mapping(address => bool) public hasVoted;
+    mapping(bytes32 => uint256) public votes; // Track votes for each candidate by their ID
+    bytes32[] public candidateList;
+
+    event VoteCasted(address indexed voter, bytes32 candidateId);
+    event VotingEnded();
+
+    constructor(uint256 _votingDuration, bytes32[] memory _candidates) {
+        owner = msg.sender;
+        votingEndTime = block.timestamp + _votingDuration;
+        candidateList = _candidates;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can perform this action");
+        _;
+    }
+
+    modifier onlyDuringVoting() {
+        require(block.timestamp < votingEndTime, "Voting period has ended");
+        _;
+    }
+
+    // Register vote for a candidate
+    function castVote(bytes32 _candidateId) public onlyDuringVoting {
+        require(!hasVoted[msg.sender], "You have already voted");
+        require(isValidCandidate(_candidateId), "Invalid candidate ID");
+
+        // Record the vote
+        votes[_candidateId] += 1;
+        hasVoted[msg.sender] = true;
+
+        // Verify that the vote was registered
+        assert(hasVoted[msg.sender] == true);
+
+        emit VoteCasted(msg.sender, _candidateId);
+    }
+
+    // Check if a candidate ID is valid
+    function isValidCandidate(bytes32 _candidateId) internal view returns (bool) {
+        for (uint256 i = 0; i < candidateList.length; i++) {
+            if (candidateList[i] == _candidateId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // End voting (only callable by the owner)
+    function endVoting() public onlyOwner {
+        require(block.timestamp >= votingEndTime, "Voting period is still ongoing");
+        
+        emit VotingEnded();
+    }
+
+    // Get total votes for a candidate
+    function getVotes(bytes32 _candidateId) public view returns (uint256) {
+        require(isValidCandidate(_candidateId), "Invalid candidate ID");
+        return votes[_candidateId];
+    }
+
+    // Get the winning candidate after voting has ended
+    function getWinner() public view returns (bytes32 winningCandidate) {
+        require(block.timestamp >= votingEndTime, "Voting is still in progress");
+        uint256 maxVotes = 0;
+
+        for (uint256 i = 0; i < candidateList.length; i++) {
+            bytes32 candidateId = candidateList[i];
+            if (votes[candidateId] > maxVotes) {
+                maxVotes = votes[candidateId];
+                winningCandidate = candidateId;
+            }
+        }
+    }
